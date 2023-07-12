@@ -235,3 +235,29 @@ class Connection:
             self._create_csr(csr_id, "_edgedf", src_key, dst_key, "_srcdf", src_ref_col, "_dstdf", dst_ref_col)
         return csr_id
 
+    def save_dgl_homograph(self, g, node_table_name, edge_feature_table_name, edge_table_name):
+        _data_dict = {}
+        ## save node features
+        for k, v in g.ndata.items():
+            _data_dict[k] = v.numpy().reshape(len(v))
+        query = "CREATE TABLE {} AS SELECT * FROM _data_dict"
+        self.sql(query.format(node_table_name))
+
+        ## save edge features
+        _data_dict = {}
+        for k, v in g.edata.items():
+            _data_dict[k] = v.numpy().reshape(len(v))
+        query = "CREATE TABLE {} AS SELECT * FROM _data_dict"
+        self.sql(query.format(edge_feature_table_name))
+
+        ## construct edge table
+        _data_dict = {}
+        _src, _dst = g.adj_tensors("coo")
+        _src = _src.numpy()
+        _dst = _dst.numpy()
+        _data_dict = {"src": _src, "_dst": _dst}
+        query = "CREATE TABLE {} AS SELECT * FROM _data_dict"
+        self.sql(query.format(edge_table_name))
+
+    def save_dgl_heterograph(self, g):
+        pass

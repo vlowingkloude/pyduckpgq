@@ -260,4 +260,37 @@ class Connection:
         self.sql(query.format(edge_table_name))
 
     def save_dgl_heterograph(self, g):
-        pass
+        _data_dict = {}
+        for fname, nested in g.ndata.items():
+            for t, feat in nested.items():
+                if t in _data_dict:
+                    _data_dict[t][fname] = v.numpy().reshape(len(feat))
+                else:
+                    _data_dict[t] = {}
+                    _data_dict[t][fname] = v.numpy().reshape(len(feat))
+
+        query = "CREATE TABLE {} AS SELECT * FROM _data"
+        for k, _data in _data_dict.items():
+            self.sql(query.format(k))
+
+        _data_dict = {}
+        for fname, nested in g.edata.items():
+            for t, feat in nested.items():
+                if t in _data_dict:
+                    _data_dict[t][fname] = v.numpy().reshape(len(feat))
+                else:
+                    _data_dict[t] = {}
+                    _data_dict[t][fname] = v.numpy().reshape(len(feat))
+
+        query = "CREATE TABLE {} AS SELECT * FROM _data"
+        for k, _data in _data_dict.items():
+            self.sql(query.format(k))
+
+        _data_dict = {}
+        for etype in g.etypes:
+            _src, _dst = g.adj_tensors("coo", etype)
+            _src = _src.numpy()
+            _dst = _dst.numpy()
+            _data_dict = {"src": _src, "_dst": _dst}
+            query = "CREATE TABLE {} AS SELECT * FROM _data_dict"
+            self.sql(query.format(etype))

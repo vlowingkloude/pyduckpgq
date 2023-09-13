@@ -1,6 +1,8 @@
 import duckdb
 import numpy as np
 import decorators
+import torch
+import duckcsr
 
 class CSR:
     def __init__(self, v, e, w):
@@ -45,9 +47,12 @@ class Connection:
         return self.sql(query).torch()['csrw']
 
     def get_csr(self, csr_id):
-        v = self._get_csr_v(csr_id)
-        e = self._get_csr_e(csr_id)
-        w = self._get_csr_w(csr_id)
+        query = f"SELECT * FROM get_csr_ptr({csr_id})"
+        v, e, w, vsize, wtype = self.sql(query).fetchall()
+        v, e, w = duckcsr.get_csr(v[0], e[0], w[0], vsize[0], wtype[0])
+        v = torch.from_numpy(v)
+        e = torch.from_numpy(e)
+        w = torch.from_numpy(w)
         return CSR(v,e,w)
 
     def _get_vtablenames(self, pgname):
@@ -95,10 +100,14 @@ class Connection:
         etables = self._get_etablenames(pgname)
         csr = self.get_csr(csr_id)
         if len(vtables) == 1 and len(etables) == 1:
-            if csr.w == None:
-                adj_t = SparseTensor(rowptr = csr.v, col = csr.e, value = csr.w)
+            if csr.w == None or len(csr.w) != len(csr.e):
+                w = torch.ones(len(csr.e))
+                csrtensor = torch.sparse_csr_tensor(csr.v, csr.e, w)
+                #adj_t = SparseTensor(rowptr = csr.v, col = csr.e, value = csr.w)
             else:
-                adj_t = SparseTensor(rowptr = csr.v, col = csr.e)
+                #adj_t = SparseTensor(rowptr = csr.v, col = csr.e)
+                csrtensor = torch.sparse_csr_tensor(csr.v, csr.e, csr.w)
+            coo = csrtensor.to_sparse_coo()
             cols = self._get_vcolnames(pgname, vtables[0][0])
             node_features = self._get_features(vtables[0][0], cols, drop_non_numeric)
             cols = self._get_ecolnames(pgname, etables[0][0])
@@ -127,8 +136,8 @@ class Connection:
             edge_attr = torch.from_numpy(np.array(newvalues))"""
             datax = torch.stack(list(node_features.values()), dim = 1)
             edge_attr = torch.stack(list(edge_features.values()), dim = 1)
-            data = Data(x = datax, edge_attr = edge_attr)
-            data.adj_t = adj_t
+            data = Data(x = datax,edge_index = coo.indices(), edge_attr = edge_attr)
+            #data.adj_t = adj_t
             return data
         else:
             raise Exception("heterogeneous graph is not supported yet")

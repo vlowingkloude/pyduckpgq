@@ -60,7 +60,6 @@ def require_rowid(f):
                 table.rename(columns = {"rowid": original}, inplace = True)
             table['rowid'] = table.index
             deleter = pddf_deleter
-            f(*args, **kwargs)
         elif isinstance(table, pldf):
             original = None
             if 'rowid' in table.columns:
